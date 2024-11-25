@@ -1,0 +1,172 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/adapters.dart';
+
+import 'add_screen.dart';
+import 'data/data.dart';
+import 'delete_screen.dart';
+import 'navigation.dart';
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  bool isChecked = false;
+
+  final Box<Data> _taskBox = Hive.box('tasks');
+  final Box<Data> _deletedTasks = Hive.box('deletedTasks');
+
+  void update(int index, bool newValue) {
+    final task = _taskBox.getAt(index)!;
+    setState(() {
+      final updateTask =
+          Data(title: task.title, notes: task.notes, isDone: newValue);
+      _taskBox.putAt(index, updateTask);
+    });
+  }
+
+  void delete(int index) {
+    setState(() {
+      _deletedTasks.add(_taskBox.getAt(index)!);
+      _taskBox.deleteAt(index);
+    });
+  }
+
+  List<int> selectedIndex = [];
+
+  void deletedSelectedTask() {
+    final keysToDelete = selectedIndex.map((int index) => _taskBox.keyAt(index)).toList();
+    // _deletedTasks.addAll(keysToDelete as Iterable<Data>);
+    _taskBox.deleteAll(keysToDelete);
+    selectedIndex.clear();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            ListTile(
+                title: Text("Удаленные данные"),
+                trailing: Icon(Icons.delete_outline),
+                onTap: () {
+                  Navigation.push(context, const DeleteScreen());
+                })
+          ],
+        ),
+      ),
+      backgroundColor: Colors.grey.shade100,
+      body: SafeArea(
+        child: ValueListenableBuilder(
+          valueListenable: _taskBox.listenable(),
+          builder: (BuildContext context, Box<Data> value, Widget? child) {
+            if (value.isEmpty) {
+              return const Center(
+                child: Text("No tasks yet"),
+              );
+            }
+            return ListView.builder(
+              itemCount: value.length,
+              shrinkWrap: true,
+              itemBuilder: (context, index) {
+                final task = value.getAt(index);
+                final isSelected = selectedIndex.contains(index);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Card(
+                    child: Container(
+                      height: 120,
+                      color: Colors.white,
+                      alignment: Alignment.center,
+                      child: ListTile(
+                        title: Text(
+                          task!.title,
+                          style: TextStyle(
+                            decoration: task.isDone
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                          ),
+                        ),
+                        subtitle: Text(
+                          task.notes,
+                          style: TextStyle(
+                            decoration: task.isDone
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: task.isDone,
+                              onChanged: (value) {
+                                task.isDone = value!;
+                                update(index, task.isDone);
+                              },
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                delete(index);
+                              },
+                              icon: Icon(
+                                Icons.delete_outline,
+                              ),
+                            ),
+                            Checkbox(
+                                value: isSelected,
+                                onChanged: (value) {
+                                  if (value == true) {
+                                    selectedIndex.add(index);
+                                  } else {
+                                    selectedIndex.remove(index);
+                                  }
+                                  setState(() {});
+                                })
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Visibility(
+            visible: selectedIndex.isNotEmpty,
+            child: FloatingActionButton(
+              onPressed: () {
+                deletedSelectedTask();
+              },
+              child: const Icon(Icons.remove),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FloatingActionButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AddScreen(),
+                ),
+              );
+            },
+            child: const Icon(Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+}
